@@ -1,0 +1,214 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+
+	"Description": "AWS CloudFormation template for creating a Data Warehouse on Redshift for the Sparkify app. It creates a Redshift cluster, attaches an IAM role for S3 access from the cluster and gives public access to the database. Adapted from the AWS sample template.",
+
+	"Parameters": {
+		"MasterUserPassword": {
+			"Description": "The password associated with the master user account for the redshift cluster that is being created. ",
+			"Type": "String",
+			"NoEcho": "true",
+			"MinLength": "1",
+			"MaxLength": "41",
+			"AllowedPattern": "[a-zA-Z0-9]*",
+			"ConstraintDescription": "must contain only alphanumeric characters."
+		}
+	},
+
+	"Mappings": {
+		"Constants": {
+			"Redshift": {
+				"DatabaseName": "dev",
+				"DatabasePort": 5439,
+				"MasterUsername": "awsuser"
+			}
+		}
+	},
+
+
+	"Resources": {
+		"RedshiftCluster": {
+			"Type": "AWS::Redshift::Cluster",
+			"Properties": {
+				"ClusterType": "single-node",
+				"NodeType": "dc1.large",
+				"DBName": {
+					"Fn::FindInMap": ["Constants", "Redshift", "DatabaseName"]
+				},
+				"Port": {
+					"Fn::FindInMap": ["Constants", "Redshift", "DatabasePort"]
+				},
+				"MasterUsername": {
+					"Fn::FindInMap": ["Constants", "Redshift", "MasterUsername"]
+				},
+				"MasterUserPassword": {
+					"Ref": "MasterUserPassword"
+				},
+				"VpcSecurityGroupIds": [{
+					"Ref": "SecurityGroup"
+				}],
+				"ClusterSubnetGroupName": {
+					"Ref": "RedshiftClusterSubnetGroup"
+				},
+				"IamRoles": [{
+					"Fn::GetAtt": ["IamRoleS3Access", "Arn"]
+				}],
+				"PubliclyAccessible": "true"
+			}
+		},
+		"RedshiftClusterSubnetGroup": {
+			"Type": "AWS::Redshift::ClusterSubnetGroup",
+			"Properties": {
+				"Description": "Cluster subnet group",
+				"SubnetIds": [{
+					"Ref": "Subnet"
+				}]
+			}
+		},
+		"VPC": {
+			"Type": "AWS::EC2::VPC",
+			"Properties": {
+				"CidrBlock": "10.0.0.0/16"
+			}
+		},
+		"Subnet": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": "10.0.0.0/24",
+				"VpcId": {
+					"Ref": "VPC"
+				}
+			}
+		},
+		"SecurityGroup": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Security group",
+				"SecurityGroupIngress": [{
+					"CidrIp": "0.0.0.0/0",
+					"FromPort": {
+						"Fn::FindInMap": ["Constants", "Redshift", "DatabasePort"]
+					},
+					"ToPort": {
+						"Fn::FindInMap": ["Constants", "Redshift", "DatabasePort"]
+					},
+					"IpProtocol": "tcp"
+				}],
+				"VpcId": {
+					"Ref": "VPC"
+				}
+			}
+		},
+		"AttachGateway": {
+			"Type": "AWS::EC2::VPCGatewayAttachment",
+			"Properties": {
+				"VpcId": {
+					"Ref": "VPC"
+				},
+				"InternetGatewayId": {
+					"Ref": "InternetGateway"
+				}
+			}
+		},
+		"InternetGateway": {
+			"Type": "AWS::EC2::InternetGateway",
+			"Properties": {}
+		},
+		"RouteTable": {
+			"Type": "AWS::EC2::RouteTable",
+			"Properties": {
+				"VpcId": {
+					"Ref": "VPC"
+				}
+			}
+		},
+		"Route": {
+			"Type": "AWS::EC2::Route",
+			"Properties": {
+				"RouteTableId": {
+					"Ref": "RouteTable"
+				},
+				"DestinationCidrBlock": "0.0.0.0/0",
+				"GatewayId": {
+					"Ref": "InternetGateway"
+				}
+			}
+		},
+		"SubnetRouteTableAssociation": {
+			"Type": "AWS::EC2::SubnetRouteTableAssociation",
+			"Properties": {
+				"SubnetId": {
+					"Ref": "Subnet"
+				},
+				"RouteTableId": {
+					"Ref": "RouteTable"
+				}
+			}
+		},
+
+		"IamRoleS3Access": {
+			"Type": "AWS::IAM::Role",
+			"Description": "IAM Role to give access to S3 from Redshift",
+			"Properties": {
+				"AssumeRolePolicyDocument": {
+					"Statement": [{
+						"Action": "sts:AssumeRole",
+						"Effect": "Allow",
+						"Principal": {
+							"Service": "redshift.amazonaws.com"
+						}
+					}]
+				},
+				"Policies": [{
+					"PolicyDocument": {
+						"Statement": [{
+							"Action": [
+								"s3:Get*",
+								"s3:List*"
+							],
+							"Effect": "Allow",
+							"Resource": [
+								"*"
+							]
+						}]
+					},
+					"PolicyName": "S3AccessPolicy"
+				}]
+			}
+		}
+
+	},
+	"Outputs": {
+		"ClusterEndpoint": {
+			"Description": "Endpoint for the newly created RedShift cluster",
+			"Value": {
+			        "Fn::GetAtt": ["RedshiftCluster", "Endpoint.Address"]
+			}
+		},
+		"IamRoleARN": {
+			"Description": "ARN for newly created IAM role for accessing S3 from the Redshift cluster",
+			"Value": {
+				"Fn::GetAtt": ["IamRoleS3Access", "Arn"]
+			}
+		},
+		"DatabaseName": {
+			"Description": "Name of the Redshift cluster database",
+			"Value": {
+				"Fn::FindInMap": ["Constants", "Redshift", "DatabaseName"]
+			}
+		},
+		"DatabasePort": {
+			"Description": "Port of the Redshift cluster database",
+			"Value": {
+				"Fn::FindInMap": ["Constants", "Redshift", "DatabasePort"]
+			}
+		},
+		"MasterUsername": {
+			"Description": "Username of the Redshift cluster database",
+			"Value": {
+				"Fn::FindInMap": ["Constants", "Redshift", "MasterUsername"]
+			}
+		}
+
+	}
+}
