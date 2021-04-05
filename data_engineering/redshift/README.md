@@ -121,6 +121,30 @@ We provide a detailed description of the different fields in the table below:
 
 
 
+### Table constraints
+
+As part of the schema design we also add PRIMARY KEY, FOREIGN KEY and NOT NULL column constraints.
+We should be careful when applying these constraints on Redshift, because as stated in the
+[docs](https://docs.aws.amazon.com/redshift/latest/dg/t_Defining_constraints.html)
+these constraints are not being enforced by the database. 
+
+Given that we don't have control over how the data are being produced,
+we should make sure to enforce the PRIMARY KAY and FOREIGN KEY constraints as part of the ETL process.
+
+The first step is to make sure that we use the NOT NULL constraint on columns that are FOREIGN KEYS to other
+tables. For example, the `user_id`, `song_id`, `start_time`, ... columns of the `songplays` table.
+
+Additionally, when we INSERT INTO the `songs` and `artists` fact tables we make sure that the `song_id`
+and `artist_id` already exist in the `songplays` table. In other words, we do not include songs and artists
+in the fact tables that no user has streamed. If we had skipped this check, then the FOREIGN KEY constraints
+in the songplays table would be violated.
+
+
+Finally, we need to be careful with the users table, and ensure that we have the most up-to-date values.
+Specifically, for the users who have changed `level` (i.e. changed from free to paying customer or vice-versa)
+we ensure that we are selecting the entry with the latest timestamp.
+
+
  
 ### Table optimization
 

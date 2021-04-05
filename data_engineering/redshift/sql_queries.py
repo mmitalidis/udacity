@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS staging_events (
 
 staging_songs_table_create = """
 CREATE TABLE IF NOT EXISTS staging_songs (
-    artist_id VARCHAR,
+    artist_id VARCHAR NOT NULL,
     artist_latitude REAL,
     artist_location VARCHAR,
     artist_longitude REAL,
@@ -59,59 +59,69 @@ CREATE TABLE IF NOT EXISTS staging_songs (
 
 songplay_table_create = """
 CREATE TABLE IF NOT EXISTS songplays (
-    songplay_id BIGINT NOT NULL IDENTITY(1, 1),
-    start_time TIMESTAMP NOT NULL SORTKEY,
-    user_id VARCHAR DISTKEY,
-    level VARCHAR  NOT NULL,
-    song_id VARCHAR,
-    artist_id VARCHAR,
+    songplay_id BIGINT IDENTITY(1, 1),
+    start_time TIMESTAMP SORTKEY NOT NULL,
+    user_id VARCHAR DISTKEY NOT NULL,
+    level VARCHAR NOT NULL,
+    song_id VARCHAR NOT NULL,
+    artist_id VARCHAR NOT NULL,
     session_id VARCHAR NOT NULL,
     location VARCHAR,
-    user_agent VARCHAR
+    user_agent VARCHAR,
+    PRIMARY KEY (songplay_id),
+    FOREIGN KEY (start_time) REFERENCES times,
+    FOREIGN KEY (user_id) REFERENCES users,
+    FOREIGN KEY (song_id) REFERENCES songs,
+    FOREIGN KEY (artist_id) REFERENCES artists
     );
 """
 
 user_table_create = """
 CREATE TABLE IF NOT EXISTS users (
-    user_id BIGINT DISTKEY,
+    user_id BIGINT DISTKEY NOT NULL,
     first_name VARCHAR,
     last_name VARCHAR,
     gender VARCHAR,
-    level VARCHAR
+    level VARCHAR,
+    PRIMARY KEY (user_id)
     );
 """
 
 song_table_create = """
 CREATE TABLE IF NOT EXISTS songs (
     song_id VARCHAR NOT NULL,
-    title VARCHAR NOT NULL SORTKEY,
+    title VARCHAR SORTKEY NOT NULL,
     artist_id VARCHAR NOT NULL,
     year VARCHAR NOT NULL,
-    duration REAL NOT NULL
+    duration REAL NOT NULL,
+    PRIMARY KEY (song_id),
+    FOREIGN KEY (artist_id) REFERENCES artists
     )
     DISTSTYLE ALL;
 """
 
 artist_table_create = """
 CREATE TABLE IF NOT EXISTS artists (
-    artist_id VARCHAR,
-    name VARCHAR NOT NULL SORTKEY,
+    artist_id VARCHAR NOT NULL,
+    name VARCHAR SORTKEY NOT NULL,
     location VARCHAR,
     latitude REAL,
-    longitude REAL
+    longitude REAL,
+    PRIMARY KEY (artist_id)
     )
     DISTSTYLE ALL;
 """
 
 time_table_create = """
 CREATE TABLE IF NOT EXISTS times (
-    start_time TIMESTAMP SORTKEY,
+    start_time TIMESTAMP SORTKEY NOT NULL,
     hour SMALLINT,
     day SMALLINT,
     week SMALLINT,
     month SMALLINT,
     year INT,
-    weekday SMALLINT
+    weekday SMALLINT,
+    PRIMARY KEY(start_time)
     );
 """
 
@@ -160,33 +170,48 @@ SELECT DISTINCT
     s.artist_location,
     e.userAgent
 FROM staging_events e JOIN staging_songs s
-ON e.song = s.title
+ON e.song = s.title AND e.artist = s.artist_name
 WHERE e.page = 'NextSong';
 """
 
 user_table_insert = """
 INSERT INTO users (user_id, first_name, last_name, gender, level)
-SELECT DISTINCT userId, firstName, lastName, gender, level
-FROM staging_events;
+SELECT DISTINCT se.userId, se.firstName, se.lastName, se.gender, se.level
+FROM staging_events se
+NATURAL JOIN
+    (
+    SELECT userId, MAX(ts) AS ts
+    FROM staging_events
+    GROUP BY userId
+    ) grouped_staging_events;
 """
 
 
 song_table_insert = """
 INSERT INTO songs (song_id, title, artist_id, year, duration)
-SELECT DISTINCT song_id, title, artist_id, year, duration
-FROM staging_songs;
+SELECT DISTINCT ss.song_id, ss.title, ss.artist_id, ss.year, ss.duration
+FROM staging_songs ss
+NATURAL JOIN
+    (
+    SELECT song_id, artist_id
+    FROM songplays
+    ) s;
 """
 
 
 artist_table_insert = """
 INSERT INTO artists (artist_id, name, location, longitude, latitude)
-SELECT DISTINCT
-    artist_id,
-    artist_name AS name,
-    artist_location AS location,
-    artist_longitude AS longitude,
-    artist_latitude AS latitude
-FROM staging_songs;
+SELECT DISTINCT ss.artist_id,
+    ss.artist_name AS name,
+    ss.artist_location AS location,
+    ss.artist_longitude AS longitude,
+    ss. artist_latitude AS latitude
+FROM staging_songs ss
+NATURAL JOIN
+    (
+    SELECT artist_id
+    FROM songplays
+    ) s;
 """
 
 
@@ -208,19 +233,19 @@ FROM songplays;
 create_table_queries = [
     staging_events_table_create,
     staging_songs_table_create,
-    songplay_table_create,
-    user_table_create,
-    song_table_create,
-    artist_table_create,
     time_table_create,
+    user_table_create,
+    artist_table_create,
+    song_table_create,
+    songplay_table_create,
 ]
 drop_table_queries = [
     staging_events_table_drop,
     staging_songs_table_drop,
     songplay_table_drop,
-    user_table_drop,
     song_table_drop,
     artist_table_drop,
+    user_table_drop,
     time_table_drop,
 ]
 load_staging_table_queries = [staging_songs_copy, staging_events_copy]
