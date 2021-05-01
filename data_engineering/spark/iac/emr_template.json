@@ -1,0 +1,277 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Outputs": {
+        "KeyName": {
+            "Description": "Use the following key to ssh to the EMR cluster.",
+            "Value": {
+                "Ref": "Ec2KeyName"
+            }
+        },
+        "MasterNodeEndpoint": {
+            "Description": "Access the EMR cluster from the following endpoint (the user should be hadoop)",
+            "Value": {
+                "Fn::GetAtt": [
+                    "cluster",
+                    "MasterPublicDNS"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "Ec2KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH to the instances",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "SourceS3BucketArn": {
+            "Default": "arn:aws:s3:::udacity-dend",
+            "Description": "ARN of the S3 bucket that the EMR cluster will read data from",
+            "Type": "String"
+        },
+        "TargetS3BucketArn": {
+            "Default": "arn:aws:s3:::udacity-mm-spark-etl-test",
+            "Description": "ARN of the S3 bucket that the EMR cluster will read data from",
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "AttachGateway": {
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            },
+            "Type": "AWS::EC2::VPCGatewayAttachment"
+        },
+        "EMRInstanceProfile": {
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EMRJobFlowRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::InstanceProfile"
+        },
+        "EMRJobFlowRole": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "s3:*"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": {
+                                        "Fn::Join": [
+                                            "/",
+                                            [
+                                                {
+                                                    "Ref": "TargetS3BucketArn"
+                                                },
+                                                "*"
+                                            ]
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "PolicyName": "S3TargetFullAccess"
+                    },
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "s3:Get*",
+                                        "s3:List*"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": {
+                                        "Fn::Join": [
+                                            "/",
+                                            [
+                                                {
+                                                    "Ref": "SourceS3BucketArn"
+                                                },
+                                                "*"
+                                            ]
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "PolicyName": "S3SourceReadOnlyAccess"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Role"
+        },
+        "EMRServiceRole": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "elasticmapreduce.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole"
+                ]
+            },
+            "Type": "AWS::IAM::Role"
+        },
+        "InstanceSecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Enable SSH access via port 22",
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "22",
+                        "IpProtocol": "tcp",
+                        "ToPort": "22"
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway"
+        },
+        "Route": {
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                }
+            },
+            "Type": "AWS::EC2::Route"
+        },
+        "RouteTable": {
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            },
+            "Type": "AWS::EC2::RouteTable"
+        },
+        "Subnet": {
+            "Properties": {
+                "CidrBlock": "10.0.0.0/24",
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            },
+            "Type": "AWS::EC2::Subnet"
+        },
+        "SubnetRouteTableAssociation": {
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "Subnet"
+                }
+            },
+            "Type": "AWS::EC2::SubnetRouteTableAssociation"
+        },
+        "VPC": {
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16"
+            },
+            "Type": "AWS::EC2::VPC"
+        },
+        "cluster": {
+            "Properties": {
+                "Applications": [
+                    {
+                        "Name": "Spark"
+                    }
+                ],
+                "Configurations": [
+                    {
+                        "Classification": "hadoop-env",
+                        "Configurations": [
+                            {
+                                "Classification": "export",
+                                "ConfigurationProperties": {
+                                    "PYSPARK_PYTHON": "usr/bin/python3"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "Instances": {
+                    "AdditionalMasterSecurityGroups": [
+                        {
+                            "Ref": "InstanceSecurityGroup"
+                        }
+                    ],
+                    "CoreInstanceGroup": {
+                        "InstanceCount": "3",
+                        "InstanceType": "m5.xlarge",
+                        "Market": "ON_DEMAND",
+                        "Name": "Core Instance"
+                    },
+                    "Ec2KeyName": {
+                        "Ref": "Ec2KeyName"
+                    },
+                    "Ec2SubnetId": {
+                        "Ref": "Subnet"
+                    },
+                    "MasterInstanceGroup": {
+                        "InstanceCount": "1",
+                        "InstanceType": "m5.xlarge",
+                        "Market": "ON_DEMAND",
+                        "Name": "Master Instance"
+                    }
+                },
+                "JobFlowRole": {
+                    "Ref": "EMRInstanceProfile"
+                },
+                "Name": "Spark Cluster",
+                "ReleaseLabel": "emr-5.28.0",
+                "ServiceRole": {
+                    "Ref": "EMRServiceRole"
+                },
+                "VisibleToAllUsers": "true"
+            },
+            "Type": "AWS::EMR::Cluster"
+        }
+    }
+}
