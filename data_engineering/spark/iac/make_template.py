@@ -6,37 +6,26 @@ import troposphere.emr as emr
 import troposphere.iam as iam
 from awacs.aws import Action, Allow, PolicyDocument, Statement, Principal
 from troposphere import (
-    Equals,
-    If,
     Join,
     GetAtt,
-    Not,
     Parameter,
     Ref,
-    Tags,
     Template,
     Output,
 )
-from troposphere.constants import KEY_PAIR_NAME, M5_XLARGE, NUMBER, SUBNET_ID
+from troposphere.constants import KEY_PAIR_NAME, M5_XLARGE
 from troposphere.ec2 import (
-    EIP,
     VPC,
-    Instance,
     InternetGateway,
-    NetworkAcl,
-    NetworkAclEntry,
-    NetworkInterfaceProperty,
-    PortRange,
     Route,
     RouteTable,
     SecurityGroup,
     SecurityGroupRule,
     Subnet,
-    SubnetNetworkAclAssociation,
     SubnetRouteTableAssociation,
     VPCGatewayAttachment,
 )
-from troposphere.iam import Policy, Role
+from troposphere.iam import Policy
 
 
 def main() -> None:
@@ -80,7 +69,7 @@ def add_network_resources(template: Template) -> None:
         Route(
             "Route",
             DependsOn="AttachGateway",
-            GatewayId=Ref("InternetGateway"),
+            GatewayId=Ref(internetGateway),
             DestinationCidrBlock="0.0.0.0/0",
             RouteTableId=Ref(routeTable),
         )
@@ -93,45 +82,6 @@ def add_network_resources(template: Template) -> None:
             RouteTableId=Ref(routeTable),
         )
     )
-
-    # networkAcl = template.add_resource(
-    #    NetworkAcl(
-    #        "NetworkAcl",
-    #        VpcId=Ref(vpc),
-    #    )
-    # )
-    # inboundSSHNetworkAclEntry = template.add_resource(
-    #    NetworkAclEntry(
-    #        "InboundSSHNetworkAclEntry",
-    #        NetworkAclId=Ref(networkAcl),
-    #        RuleNumber="101",
-    #        Protocol="6",
-    #        PortRange=PortRange(To="22", From="22"),
-    #        Egress="false",
-    #        RuleAction="allow",
-    #        CidrBlock="0.0.0.0/0",
-    #    )
-    # )
-    # inboundHttpsNetworkAclEntry = template.add_resource(
-    #    NetworkAclEntry(
-    #        "InboundHttpsNetworkAclEntry",
-    #        NetworkAclId=Ref(networkAcl),
-    #        RuleNumber="102",
-    #        Protocol="6",
-    #        PortRange=PortRange(To="8443", From="8443"),
-    #        Egress="false",
-    #        RuleAction="allow",
-    #        CidrBlock="0.0.0.0/0",
-    #    )
-    # )
-
-    # subnetNetworkAclAssociation = template.add_resource(
-    #    SubnetNetworkAclAssociation(
-    #        "SubnetNetworkAclAssociation",
-    #        SubnetId=Ref(subnet),
-    #        NetworkAclId=Ref(networkAcl),
-    #    )
-    # )
 
     instanceSecurityGroup = template.add_resource(
         SecurityGroup(
@@ -213,7 +163,7 @@ def add_emr_cluster(template: Template) -> None:
                         Statement=[
                             Statement(
                                 Effect=Allow,
-                                Resource=Join("/", [Ref(target_s3_bucket_arn), "*"]),
+                                Resource=Join("", [Ref(target_s3_bucket_arn), "*"]),
                                 Action=[Action("s3", "*")],
                             )
                         ]
@@ -225,7 +175,7 @@ def add_emr_cluster(template: Template) -> None:
                         Statement=[
                             Statement(
                                 Effect=Allow,
-                                Resource=Join("/", [Ref(source_s3_bucket_arn), "*"]),
+                                Resource=Join("", [Ref(source_s3_bucket_arn), "*"]),
                                 Action=[Action("s3", "Get*"), Action("s3", "List*")],
                             )
                         ]
@@ -244,19 +194,6 @@ def add_emr_cluster(template: Template) -> None:
             "cluster",
             Name="Spark Cluster",
             ReleaseLabel="emr-5.28.0",
-            Configurations=[
-                emr.Configuration(
-                    Classification="hadoop-env",
-                    Configurations=[
-                        emr.Configuration(
-                            Classification="export",
-                            ConfigurationProperties={
-                                "PYSPARK_PYTHON": "usr/bin/python3",
-                            },
-                        )
-                    ],
-                ),
-            ],
             JobFlowRole=Ref(emr_instance_profile),
             ServiceRole=Ref(emr_service_role),
             Instances=emr.JobFlowInstancesConfig(
@@ -274,7 +211,7 @@ def add_emr_cluster(template: Template) -> None:
                 CoreInstanceGroup=emr.InstanceGroupConfigProperty(
                     Name="Core Instance",
                     Market="ON_DEMAND",
-                    InstanceCount="3",
+                    InstanceCount="10",
                     InstanceType=M5_XLARGE,
                 ),
             ),

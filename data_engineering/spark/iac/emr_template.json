@@ -83,7 +83,7 @@
                                     "Effect": "Allow",
                                     "Resource": {
                                         "Fn::Join": [
-                                            "/",
+                                            "",
                                             [
                                                 {
                                                     "Ref": "TargetS3BucketArn"
@@ -108,7 +108,7 @@
                                     "Effect": "Allow",
                                     "Resource": {
                                         "Fn::Join": [
-                                            "/",
+                                            "",
                                             [
                                                 {
                                                     "Ref": "SourceS3BucketArn"
@@ -223,19 +223,6 @@
                         "Name": "Spark"
                     }
                 ],
-                "Configurations": [
-                    {
-                        "Classification": "hadoop-env",
-                        "Configurations": [
-                            {
-                                "Classification": "export",
-                                "ConfigurationProperties": {
-                                    "PYSPARK_PYTHON": "usr/bin/python3"
-                                }
-                            }
-                        ]
-                    }
-                ],
                 "Instances": {
                     "AdditionalMasterSecurityGroups": [
                         {
@@ -243,7 +230,7 @@
                         }
                     ],
                     "CoreInstanceGroup": {
-                        "InstanceCount": "3",
+                        "InstanceCount": "10",
                         "InstanceType": "m5.xlarge",
                         "Market": "ON_DEMAND",
                         "Name": "Core Instance"
