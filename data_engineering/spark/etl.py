@@ -1,4 +1,6 @@
 import os
+import configparser
+import logging
 
 import pyspark.sql.functions as f
 from pyspark.sql import SparkSession, Window
@@ -12,6 +14,18 @@ from pyspark.sql.types import (
     DoubleType,
     TimestampType,
 )
+
+logger = logging.getLogger()
+
+def setup_aws_credentials() -> None:
+    """Sets the AWS credentials as environment variables."""
+    config = configparser.ConfigParser()
+    config.read("dl.cfg")
+    try:
+        os.environ["AWS_ACCESS_KEY_ID"] = config["AWS"]["AWS_ACCESS_KEY_ID"]
+        os.environ["AWS_SECRET_ACCESS_KEY"] = config["AWS"]["AWS_SECRET_ACCESS_KEY"]
+    except KeyError:
+        logger.warning("Cannot read the AWS credentials.")
 
 
 def create_spark_session() -> SparkSession:
@@ -193,6 +207,7 @@ def make_songplays_table(
 
 def main() -> None:
     """ETL process to read data raw data, transform to a star schema and write them back."""
+    setup_aws_credentials()
     spark: SparkSession = create_spark_session()
 
     log_data: DataFrame = read_log_data(
