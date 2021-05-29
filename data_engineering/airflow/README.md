@@ -46,14 +46,12 @@ Note that for accessing Redshift we will be using the `Postgres` connection type
 
 Finally trigger the DAG by turning it on.
 
-![pipeline](images/pipeline.png)
-
 Note: Given the data that currently reside in S3, one will have to change the end_date and a few other parameters
 in the main etl file before running it. Please see the instructions in the file.
 
 ## Airflow Pipelines Design
 
-![pipeline_graph_view](images/graph_tree_view.png)
+![pipeline_graph_view](images/graph_view.png)
 
 The pipeline consists 3 different types of Airflow Operators. By splitting the functionality in small
 reusable Operators we make the code more flexible and robust.
@@ -68,3 +66,5 @@ before inserting the data again. The fact table is often very big, and it is not
 
 Finally, we are performing data quality checks with the `DataQualityOperator`. It accepts a list of SQL queries and
 expected results. It verifies that the loaded data are as expected.
+
+![pipeline_graph_tree_view](images/graph_tree_view.png)
